@@ -15,6 +15,16 @@ Options:
     return 0
   fi
 
+  if ! command -v git &>/dev/null; then
+    echo "Error: git is not installed. Install it from https://git-scm.com"
+    return 1
+  fi
+
+  if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+    echo "Error: not inside a git repository. Run 'git init' or cd into a repo."
+    return 1
+  fi
+
   local DELETE=false
   if [ "$1" = "-d" ]; then
     DELETE=true
