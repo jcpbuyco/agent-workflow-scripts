@@ -30,3 +30,11 @@ gwt -d <branch-name>               # Delete a worktree
 gwt -l                             # List all worktrees
 gwt -h | --help                    # Show help
 ```
+
+#### Example: Using with Claude Code
+
+```bash
+gwt -c my-feature -- claude
+```
+
+This creates a worktree on the `my-feature` branch and starts a Claude Code session in it, isolating your work from the main branch.
