@@ -1,11 +1,18 @@
 #!/bin/bash
 
 gwt() {
-  local usage="Usage: gwt <branch-name>\n       gwt -d <branch-name>"
+  local usage="Usage: gwt <branch-name>
+       gwt -d <branch-name>
+       gwt -h | --help
 
-  if [ -z "$1" ]; then
-    echo -e "$usage"
-    return 1
+Options:
+  <branch-name>  Create a worktree and cd into it
+  -d <branch>    Delete a worktree
+  -h, --help     Show this help message"
+
+  if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    echo "$usage"
+    return 0
   fi
 
   local DELETE=false
