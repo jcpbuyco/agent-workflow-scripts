@@ -12,6 +12,7 @@ Options:
   <branch-name>           Create a worktree and print its path
   -c <branch> -- <cmd>    Create a worktree and run a command in it
   -d <branch>             Delete a worktree
+  -b                      Print the main worktree path
   -l                      List all worktrees
   -h, --help              Show this help message"
 
@@ -32,6 +33,11 @@ fi
 
 if [ "$1" = "-l" ]; then
   git worktree list
+  exit 0
+fi
+
+if [ "$1" = "-b" ]; then
+  git worktree list --porcelain | head -1 | sed 's/worktree //'
   exit 0
 fi
 
