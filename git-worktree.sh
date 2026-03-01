@@ -3,11 +3,13 @@
 gwt() {
   local usage="Usage: gwt <branch-name>
        gwt -d <branch-name>
+       gwt -l
        gwt -h | --help
 
 Options:
   <branch-name>  Create a worktree and cd into it
   -d <branch>    Delete a worktree
+  -l             List all worktrees
   -h, --help     Show this help message"
 
   if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
@@ -23,6 +25,11 @@ Options:
   if ! git rev-parse --is-inside-work-tree &>/dev/null; then
     echo "Error: not inside a git repository. Run 'git init' or cd into a repo."
     return 1
+  fi
+
+  if [ "$1" = "-l" ]; then
+    git worktree list
+    return 0
   fi
 
   local DELETE=false
