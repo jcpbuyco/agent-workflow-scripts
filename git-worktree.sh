@@ -1,68 +1,90 @@
 #!/bin/bash
 
-gwt() {
-  local usage="Usage: gwt <branch-name>
+set -e
+
+USAGE="Usage: gwt <branch-name>
+       gwt -c <branch-name> -- <command> [args...]
        gwt -d <branch-name>
        gwt -l
        gwt -h | --help
 
 Options:
-  <branch-name>  Create a worktree and cd into it
-  -d <branch>    Delete a worktree
-  -l             List all worktrees
-  -h, --help     Show this help message"
+  <branch-name>           Create a worktree and print its path
+  -c <branch> -- <cmd>    Create a worktree and run a command in it
+  -d <branch>             Delete a worktree
+  -l                      List all worktrees
+  -h, --help              Show this help message"
 
-  if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    echo "$usage"
-    return 0
+if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  echo "$USAGE"
+  exit 0
+fi
+
+if ! command -v git &>/dev/null; then
+  echo "Error: git is not installed. Install it from https://git-scm.com"
+  exit 1
+fi
+
+if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+  echo "Error: not inside a git repository. Run 'git init' or cd into a repo."
+  exit 1
+fi
+
+if [ "$1" = "-l" ]; then
+  git worktree list
+  exit 0
+fi
+
+if [ "$1" = "-d" ]; then
+  shift
+  if [ -z "$1" ]; then
+    echo "$USAGE"
+    exit 1
   fi
+  BRANCH="$1"
+  REPO_DIR="$(git rev-parse --show-toplevel)"
+  REPO_NAME="$(basename "$REPO_DIR")"
+  PARENT_DIR="$(dirname "$REPO_DIR")"
+  WORKTREE_DIR="$PARENT_DIR/$REPO_NAME-$BRANCH"
 
-  if ! command -v git &>/dev/null; then
-    echo "Error: git is not installed. Install it from https://git-scm.com"
-    return 1
+  git worktree remove "$WORKTREE_DIR"
+  echo "Removed worktree at $WORKTREE_DIR"
+  exit 0
+fi
+
+CMD=()
+if [ "$1" = "-c" ]; then
+  shift
+  if [ -z "$1" ]; then
+    echo "$USAGE"
+    exit 1
   fi
-
-  if ! git rev-parse --is-inside-work-tree &>/dev/null; then
-    echo "Error: not inside a git repository. Run 'git init' or cd into a repo."
-    return 1
-  fi
-
-  if [ "$1" = "-l" ]; then
-    git worktree list
-    return 0
-  fi
-
-  local DELETE=false
-  if [ "$1" = "-d" ]; then
-    DELETE=true
+  BRANCH="$1"
+  shift
+  if [ "$1" = "--" ]; then
     shift
-    if [ -z "$1" ]; then
-      echo -e "$usage"
-      return 1
-    fi
   fi
-
-  local BRANCH="$1"
-  local REPO_DIR="$(git rev-parse --show-toplevel)"
-  local REPO_NAME="$(basename "$REPO_DIR")"
-  local PARENT_DIR="$(dirname "$REPO_DIR")"
-  local WORKTREE_DIR="$PARENT_DIR/$REPO_NAME-$BRANCH"
-
-  if [ "$DELETE" = true ]; then
-    git worktree remove "$WORKTREE_DIR"
-    echo "Removed worktree at $WORKTREE_DIR"
-    return 0
+  if [ $# -eq 0 ]; then
+    echo "Error: no command specified after --"
+    exit 1
   fi
+  CMD=("$@")
+else
+  BRANCH="$1"
+fi
+REPO_DIR="$(git rev-parse --show-toplevel)"
+REPO_NAME="$(basename "$REPO_DIR")"
+PARENT_DIR="$(dirname "$REPO_DIR")"
+WORKTREE_DIR="$PARENT_DIR/$REPO_NAME-$BRANCH"
 
-  if [ -d "$WORKTREE_DIR" ]; then
-    echo "Directory already exists, navigating to it"
-    cd "$WORKTREE_DIR"
-    return 0
-  fi
-
+if [ ! -d "$WORKTREE_DIR" ]; then
   git worktree add "$WORKTREE_DIR" -b "$BRANCH" 2>/dev/null \
     || git worktree add "$WORKTREE_DIR" "$BRANCH"
-
   echo "Created worktree at $WORKTREE_DIR"
-  cd "$WORKTREE_DIR"
-}
+fi
+
+if [ ${#CMD[@]} -gt 0 ]; then
+  cd "$WORKTREE_DIR" && exec "${CMD[@]}"
+else
+  echo "$WORKTREE_DIR"
+fi

@@ -2,25 +2,32 @@
 
 Shell utilities for streamlining development workflows.
 
+## Installation
+
+```bash
+mkdir -p ~/.local/bin
+cp git-worktree.sh ~/.local/bin/gwt
+chmod +x ~/.local/bin/gwt
+```
+
+Make sure `~/.local/bin` is in your `PATH`. Add this to your `.zshrc` or `.bashrc` if it isn't:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
 ## Scripts
 
 ### `gwt` - Git Worktree Helper
 
-A shell function that simplifies creating, navigating, and managing git worktrees. Worktrees are created as sibling directories named `<repo>-<branch>`.
-
-#### Setup
-
-Source the script in your `.zshrc` or `.bashrc`:
-
-```bash
-source /path/to/git-worktree.sh
-```
+Simplifies creating, navigating, and managing git worktrees. Worktrees are created as sibling directories named `<repo>-<branch>`.
 
 #### Usage
 
 ```
-gwt <branch-name>       # Create a worktree and cd into it
-gwt -d <branch-name>    # Delete a worktree
-gwt -l                  # List all worktrees
-gwt -h | --help         # Show help
+gwt <branch-name>                  # Create a worktree and print its path
+gwt -c <branch> -- <cmd> [args]    # Create a worktree and run a command in it
+gwt -d <branch-name>               # Delete a worktree
+gwt -l                             # List all worktrees
+gwt -h | --help                    # Show help
 ```
