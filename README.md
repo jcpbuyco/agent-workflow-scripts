@@ -6,8 +6,7 @@ Shell utilities for streamlining development workflows.
 
 ```bash
 mkdir -p ~/.local/bin
-cp git-worktree.sh ~/.local/bin/gwt
-chmod +x ~/.local/bin/gwt
+ln -s "$(pwd)/git-worktree.sh" ~/.local/bin/gwt
 ```
 
 Make sure `~/.local/bin` is in your `PATH`. Add this to your `.zshrc` or `.bashrc` if it isn't:
