@@ -15,6 +15,12 @@ Make sure `~/.local/bin` is in your `PATH`. Add this to your `.zshrc` or `.bashr
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+To quickly navigate between worktrees, add this to your `.zshrc` or `.bashrc`:
+
+```bash
+gwtcd() { cd "$(gwt "$@")"; }
+```
+
 ## Scripts
 
 ### `gwt` - Git Worktree Helper
