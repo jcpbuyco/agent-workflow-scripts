@@ -83,10 +83,17 @@ REPO_NAME="$(basename "$REPO_DIR")"
 PARENT_DIR="$(dirname "$REPO_DIR")"
 WORKTREE_DIR="$PARENT_DIR/$REPO_NAME-$BRANCH"
 
-if [ ! -d "$WORKTREE_DIR" ]; then
+EXISTING=$(git worktree list --porcelain | awk -v branch="$BRANCH" '
+  /^worktree / { path = substr($0, 10) }
+  /^branch / { if ($0 == "branch refs/heads/" branch) print path }
+')
+
+if [ -n "$EXISTING" ]; then
+  WORKTREE_DIR="$EXISTING"
+elif [ ! -d "$WORKTREE_DIR" ]; then
   git worktree add "$WORKTREE_DIR" -b "$BRANCH" 2>/dev/null \
     || git worktree add "$WORKTREE_DIR" "$BRANCH"
-  echo "Created worktree at $WORKTREE_DIR"
+  echo "Created worktree at $WORKTREE_DIR" >&2
 fi
 
 if [ ${#CMD[@]} -gt 0 ]; then
