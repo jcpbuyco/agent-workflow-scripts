@@ -37,10 +37,18 @@ gwt -l                             # List all worktrees
 gwt -h | --help                    # Show help
 ```
 
-#### Example: Using with Claude Code
+#### Examples
+
+Navigate between worktrees:
+
+```bash
+gwtcd my-feature    # Create and cd into a worktree
+gwtcd other-branch  # Switch to another worktree
+gwtcd -b            # Go back to the main repo
+```
+
+Start a Claude Code session in a worktree:
 
 ```bash
 gwt -c my-feature -- claude
 ```
-
-This creates a worktree on the `my-feature` branch and starts a Claude Code session in it, isolating your work from the main branch.
