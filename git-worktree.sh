@@ -12,6 +12,7 @@ Options:
   <branch-name>           Create a worktree and print its path
   -c <branch> -- <cmd>    Create a worktree and run a command in it
   -d <branch>             Delete a worktree
+  -D <branch>             Delete worktree and local branch
   -b                      Print the main worktree path
   -l                      List all worktrees
   -h, --help              Show this help message"
@@ -41,7 +42,8 @@ if [ "$1" = "-b" ]; then
   exit 0
 fi
 
-if [ "$1" = "-d" ]; then
+if [ "$1" = "-d" ] || [ "$1" = "-D" ]; then
+  FLAG="$1"
   shift
   if [ -z "$1" ]; then
     echo "$USAGE"
@@ -55,6 +57,16 @@ if [ "$1" = "-d" ]; then
 
   git worktree remove "$WORKTREE_DIR"
   echo "Removed worktree at $WORKTREE_DIR"
+
+  if [ "$FLAG" = "-D" ]; then
+    read -rp "Delete local branch '$BRANCH'? [y/N] " confirm
+    if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+      git branch -d "$BRANCH"
+      echo "Deleted branch $BRANCH"
+    else
+      echo "Kept branch $BRANCH"
+    fi
+  fi
   exit 0
 fi
 

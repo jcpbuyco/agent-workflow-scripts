@@ -33,6 +33,7 @@ Simplifies creating, navigating, and managing git worktrees. Worktrees are creat
 gwt <branch-name>                  # Create a worktree and print its path
 gwt -c <branch> -- <cmd> [args]    # Create a worktree and run a command in it
 gwt -d <branch-name>               # Delete a worktree
+gwt -D <branch-name>               # Delete worktree and local branch
 gwt -l                             # List all worktrees
 gwt -h | --help                    # Show help
 ```
