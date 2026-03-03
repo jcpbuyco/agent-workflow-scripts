@@ -52,3 +52,7 @@ Start a Claude Code session in a worktree:
 ```bash
 gwt -c my-feature -- claude
 ```
+
+## Claude Code
+
+Custom Claude Code configurations including a Catppuccin Macchiato status line. See [claude/README.md](claude/README.md) for setup instructions.
