@@ -12,7 +12,7 @@ RESET=$'\033[0m'
 model=$(echo "$input" | jq -r '.model.display_name // "Unknown"')
 used=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
 cwd=$(echo "$input" | jq -r '.cwd // empty')
-dir=$(basename "$cwd")
+repo=$(basename "$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || basename "$cwd")
 branch=$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 
 # Build progress bar
@@ -29,8 +29,8 @@ else
 fi
 
 location=""
-if [ -n "$dir" ]; then
-  location="${SAPPHIRE}"$'\uf07b'"${TEAL} $dir"
+if [ -n "$repo" ]; then
+  location="${SAPPHIRE}"$'\uf07b'"${TEAL} $repo"
   if [ -n "$branch" ]; then
     location="$location  ${MAUVE}"$'\ue725'"${TEAL} $branch"
   fi
