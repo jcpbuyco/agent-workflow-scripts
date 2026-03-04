@@ -31,9 +31,9 @@ fi
 
 location=""
 if [ -n "$repo" ]; then
-  location="${SAPPHIRE}"$'\uf07b'"${TEAL} $repo"
+  location="${SAPPHIRE}"$'\xef\x81\xbb'"${TEAL} $repo"
   if [ -n "$branch" ]; then
-    location="$location  ${MAUVE}"$'\ue725'"${TEAL} $branch"
+    location="$location  ${MAUVE}"$'\xee\x9c\xa5'"${TEAL} $branch"
   fi
 fi
 
