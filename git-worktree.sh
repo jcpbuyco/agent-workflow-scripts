@@ -33,29 +33,41 @@ if ! git rev-parse --git-dir &>/dev/null; then
 fi
 
 if [ "$1" = "-l" ]; then
-  # Header
-  printf "%-40s %-15s %-8s %-8s %-16s %s\n" "PATH" "BRANCH" "STATUS" "SYNC" "LAST COMMIT" "STASHES"
-
   # Parse porcelain output for paths and branches
   wt_path=""
+  is_bare=false
+  wt_count=0
   while IFS= read -r line; do
     if [[ "$line" == worktree\ * ]]; then
       wt_path="${line#worktree }"
     elif [[ "$line" == "branch "* ]]; then
       branch="${line#branch refs/heads/}"
-      branch="[$branch]"
+      max_branch=30
+      if [ ${#branch} -gt $max_branch ]; then
+        branch="${branch:0:$((max_branch - 1))}…"
+      fi
+      # Pad branch to fixed display width (printf miscounts multi-byte …)
+      branch_pad=$((max_branch - ${#branch}))
+      branch="${branch}$(printf '%*s' "$branch_pad" '')"
     elif [[ "$line" == "HEAD "* ]]; then
       : # skip HEAD lines
     elif [[ "$line" == "bare" ]]; then
       branch="(bare)"
+      is_bare=true
     elif [[ "$line" == "detached" ]]; then
       branch="(detached)"
     elif [[ -z "$line" && -n "$wt_path" ]]; then
       # Blank line = end of entry, gather info
 
+      if $is_bare; then
+        wt_path=""
+        branch=""
+        is_bare=false
+        continue
+      fi
       # Dirty/clean status
       if [ -d "$wt_path" ]; then
-        porcelain=$(git -C "$wt_path" status --porcelain 2>/dev/null)
+        porcelain=$(git -C "$wt_path" status --porcelain 2>/dev/null || true)
         if [ -n "$porcelain" ]; then
           status="dirty"
         else
@@ -74,12 +86,21 @@ if [ "$1" = "-l" ]; then
       else
         sync_str="-"
       fi
+      # Pad sync_str to 8 display chars (printf miscounts multi-byte arrows)
+      sync_pad=$((10 - ${#sync_str}))
+      sync_str="${sync_str}$(printf '%*s' "$sync_pad" '')"
 
-      # Last commit date
+      # Last commit date (compact: 3d, 2w, 5mo)
       last_commit=$(git -C "$wt_path" log -1 --format='%cr' 2>/dev/null || echo "N/A")
+      last_commit=$(echo "$last_commit" | sed -E \
+        -e 's/ seconds? ago/s/' \
+        -e 's/ minutes? ago/m/' \
+        -e 's/ hours? ago/h/' \
+        -e 's/ days? ago/d/' \
+        -e 's/ weeks? ago/w/' \
+        -e 's/ months? ago/mo/' \
+        -e 's/ years? ago/y/')
 
-      # Stash count
-      stash_count=$(git -C "$wt_path" stash list 2>/dev/null | wc -l | tr -d ' ')
 
       # Shorten path: ~/.../<repo-dir>
       display_path="${wt_path/#$HOME/\~}"
@@ -89,12 +110,22 @@ if [ "$1" = "-l" ]; then
         display_path="~/.../$repo_dir"
       fi
 
-      printf "%-40s %-15s %-8s %-8s %-16s %s\n" "$display_path" "$branch" "$status" "$sync_str" "$last_commit" "$stash_count"
+      # Print header before first entry
+      if [ $wt_count -eq 0 ]; then
+        printf "%-40s %-8s %-30s %-16s %s\n" "PATH" "STATUS" "BRANCH" "LAST COMMIT" "SYNC"
+      fi
+      wt_count=$((wt_count + 1))
+
+      printf "%-40s %-8s %s %-16s %s\n" "$display_path" "$status" "$branch" "$last_commit" "$sync_str"
 
       wt_path=""
       branch=""
+      is_bare=false
     fi
   done < <(git worktree list --porcelain; echo "")
+  if [ $wt_count -eq 0 ]; then
+    echo "No worktrees available"
+  fi
   exit 0
 fi
 
@@ -120,9 +151,13 @@ if [ "$1" = "-d" ] || [ "$1" = "-D" ]; then
   else
     REPO_DIR="$(git rev-parse --show-toplevel)"
   fi
-  REPO_NAME="$(basename "$REPO_DIR")"
-  PARENT_DIR="$(dirname "$REPO_DIR")"
-  WORKTREE_DIR="$PARENT_DIR/$REPO_NAME-$BRANCH"
+  if [ "$(git rev-parse --is-bare-repository)" = "true" ]; then
+    WORKTREE_DIR="$REPO_DIR/$BRANCH"
+  else
+    REPO_NAME="$(basename "$REPO_DIR")"
+    PARENT_DIR="$(dirname "$REPO_DIR")"
+    WORKTREE_DIR="$PARENT_DIR/$REPO_NAME-$BRANCH"
+  fi
 
   git worktree remove "$WORKTREE_DIR"
   echo "Removed worktree at $WORKTREE_DIR"
@@ -172,9 +207,13 @@ if [ "$(git rev-parse --is-bare-repository)" = "true" ]; then
 else
   REPO_DIR="$(git rev-parse --show-toplevel)"
 fi
-REPO_NAME="$(basename "$REPO_DIR")"
-PARENT_DIR="$(dirname "$REPO_DIR")"
-WORKTREE_DIR="$PARENT_DIR/$REPO_NAME-$BRANCH"
+if [ "$(git rev-parse --is-bare-repository)" = "true" ]; then
+  WORKTREE_DIR="$REPO_DIR/$BRANCH"
+else
+  REPO_NAME="$(basename "$REPO_DIR")"
+  PARENT_DIR="$(dirname "$REPO_DIR")"
+  WORKTREE_DIR="$PARENT_DIR/$REPO_NAME-$BRANCH"
+fi
 
 EXISTING=$(git worktree list --porcelain | awk -v branch="$BRANCH" '
   /^worktree / { path = substr($0, 10) }
