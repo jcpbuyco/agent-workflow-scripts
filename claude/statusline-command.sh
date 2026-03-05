@@ -6,6 +6,7 @@ input=$(cat)
 MAUVE=$'\033[38;2;198;160;246m'
 TEAL=$'\033[38;2;139;213;202m'
 SAPPHIRE=$'\033[38;2;125;196;228m'
+BLUE=$'\033[38;2;138;173;244m'
 PEACH=$'\033[38;2;245;169;127m'
 GREEN=$'\033[38;2;166;218;149m'
 RED=$'\033[38;2;237;135;150m'
@@ -53,4 +54,4 @@ if [ -n "$repo" ]; then
 fi
 
 echo "${TEAL}${location}${RESET}"
-echo "${MAUVE}${model}${RESET}  ${PEACH}${ctx_part}${RESET}  ${duration}"
+echo "${BLUE}${model}${RESET}  ${PEACH}${ctx_part}${RESET}  ${duration}"
