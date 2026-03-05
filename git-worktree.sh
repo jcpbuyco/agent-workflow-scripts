@@ -27,7 +27,7 @@ if ! command -v git &>/dev/null; then
   exit 1
 fi
 
-if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+if ! git rev-parse --git-dir &>/dev/null; then
   echo "Error: not inside a git repository. Run 'git init' or cd into a repo."
   exit 1
 fi
@@ -38,7 +38,11 @@ if [ "$1" = "-l" ]; then
 fi
 
 if [ "$1" = "-b" ]; then
-  git worktree list --porcelain | head -1 | sed 's/worktree //'
+  if [ "$(git rev-parse --is-bare-repository)" = "true" ]; then
+    cd "$(git rev-parse --git-dir)" && pwd
+  else
+    git worktree list --porcelain | head -1 | sed 's/worktree //'
+  fi
   exit 0
 fi
 
@@ -50,7 +54,11 @@ if [ "$1" = "-d" ] || [ "$1" = "-D" ]; then
     exit 1
   fi
   BRANCH="$1"
-  REPO_DIR="$(git rev-parse --show-toplevel)"
+  if [ "$(git rev-parse --is-bare-repository)" = "true" ]; then
+    REPO_DIR="$(cd "$(git rev-parse --git-dir)" && pwd)"
+  else
+    REPO_DIR="$(git rev-parse --show-toplevel)"
+  fi
   REPO_NAME="$(basename "$REPO_DIR")"
   PARENT_DIR="$(dirname "$REPO_DIR")"
   WORKTREE_DIR="$PARENT_DIR/$REPO_NAME-$BRANCH"
@@ -90,7 +98,11 @@ if [ "$1" = "-c" ]; then
 else
   BRANCH="$1"
 fi
-REPO_DIR="$(git rev-parse --show-toplevel)"
+if [ "$(git rev-parse --is-bare-repository)" = "true" ]; then
+  REPO_DIR="$(cd "$(git rev-parse --git-dir)" && pwd)"
+else
+  REPO_DIR="$(git rev-parse --show-toplevel)"
+fi
 REPO_NAME="$(basename "$REPO_DIR")"
 PARENT_DIR="$(dirname "$REPO_DIR")"
 WORKTREE_DIR="$PARENT_DIR/$REPO_NAME-$BRANCH"
