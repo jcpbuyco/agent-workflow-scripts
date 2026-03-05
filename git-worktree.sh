@@ -66,7 +66,7 @@ if [ "$1" = "-l" ]; then
       fi
 
       # Ahead/behind remote
-      sync=$(git -C "$wt_path" rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null)
+      sync=$(git -C "$wt_path" rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null || true)
       if [ -n "$sync" ]; then
         behind=$(echo "$sync" | awk '{print $1}')
         ahead=$(echo "$sync" | awk '{print $2}')
