@@ -33,7 +33,68 @@ if ! git rev-parse --git-dir &>/dev/null; then
 fi
 
 if [ "$1" = "-l" ]; then
-  git worktree list
+  # Header
+  printf "%-40s %-15s %-8s %-8s %-16s %s\n" "PATH" "BRANCH" "STATUS" "SYNC" "LAST COMMIT" "STASHES"
+
+  # Parse porcelain output for paths and branches
+  wt_path=""
+  while IFS= read -r line; do
+    if [[ "$line" == worktree\ * ]]; then
+      wt_path="${line#worktree }"
+    elif [[ "$line" == "branch "* ]]; then
+      branch="${line#branch refs/heads/}"
+      branch="[$branch]"
+    elif [[ "$line" == "HEAD "* ]]; then
+      : # skip HEAD lines
+    elif [[ "$line" == "bare" ]]; then
+      branch="(bare)"
+    elif [[ "$line" == "detached" ]]; then
+      branch="(detached)"
+    elif [[ -z "$line" && -n "$wt_path" ]]; then
+      # Blank line = end of entry, gather info
+
+      # Dirty/clean status
+      if [ -d "$wt_path" ]; then
+        porcelain=$(git -C "$wt_path" status --porcelain 2>/dev/null)
+        if [ -n "$porcelain" ]; then
+          status="dirty"
+        else
+          status="clean"
+        fi
+      else
+        status="N/A"
+      fi
+
+      # Ahead/behind remote
+      sync=$(git -C "$wt_path" rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null)
+      if [ -n "$sync" ]; then
+        behind=$(echo "$sync" | awk '{print $1}')
+        ahead=$(echo "$sync" | awk '{print $2}')
+        sync_str="↑${ahead} ↓${behind}"
+      else
+        sync_str="-"
+      fi
+
+      # Last commit date
+      last_commit=$(git -C "$wt_path" log -1 --format='%cr' 2>/dev/null || echo "N/A")
+
+      # Stash count
+      stash_count=$(git -C "$wt_path" stash list 2>/dev/null | wc -l | tr -d ' ')
+
+      # Shorten path: ~/.../<repo-dir>
+      display_path="${wt_path/#$HOME/\~}"
+      max_path=40
+      if [ ${#display_path} -gt $max_path ]; then
+        repo_dir="${display_path##*/}"
+        display_path="~/.../$repo_dir"
+      fi
+
+      printf "%-40s %-15s %-8s %-8s %-16s %s\n" "$display_path" "$branch" "$status" "$sync_str" "$last_commit" "$stash_count"
+
+      wt_path=""
+      branch=""
+    fi
+  done < <(git worktree list --porcelain; echo "")
   exit 0
 fi
 
