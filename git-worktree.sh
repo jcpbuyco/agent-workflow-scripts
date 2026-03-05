@@ -67,12 +67,20 @@ if [ "$1" = "-d" ] || [ "$1" = "-D" ]; then
   echo "Removed worktree at $WORKTREE_DIR"
 
   if [ "$FLAG" = "-D" ]; then
-    read -rp "Delete local branch '$BRANCH'? [y/N] " confirm
-    if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
-      git branch -d "$BRANCH"
-      echo "Deleted branch $BRANCH"
+    DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+    if [ -z "$DEFAULT_BRANCH" ]; then
+      DEFAULT_BRANCH=$(git config init.defaultBranch 2>/dev/null || echo "main")
+    fi
+    if [ "$BRANCH" = "$DEFAULT_BRANCH" ]; then
+      echo "Cannot delete the default branch '$DEFAULT_BRANCH'"
     else
-      echo "Kept branch $BRANCH"
+      read -rp "Delete local branch '$BRANCH'? [y/N] " confirm
+      if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+        git branch -d "$BRANCH"
+        echo "Deleted branch $BRANCH"
+      else
+        echo "Kept branch $BRANCH"
+      fi
     fi
   fi
   exit 0
@@ -115,8 +123,8 @@ EXISTING=$(git worktree list --porcelain | awk -v branch="$BRANCH" '
 if [ -n "$EXISTING" ]; then
   WORKTREE_DIR="$EXISTING"
 elif [ ! -d "$WORKTREE_DIR" ]; then
-  git worktree add "$WORKTREE_DIR" -b "$BRANCH" 2>/dev/null \
-    || git worktree add "$WORKTREE_DIR" "$BRANCH"
+  git worktree add "$WORKTREE_DIR" -b "$BRANCH" >&2 2>/dev/null \
+    || git worktree add "$WORKTREE_DIR" "$BRANCH" >&2
   echo "Created worktree at $WORKTREE_DIR" >&2
 fi
 
