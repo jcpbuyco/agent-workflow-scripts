@@ -32,6 +32,22 @@ if ! git rev-parse --git-dir &>/dev/null; then
   exit 1
 fi
 
+# Detect bare repo (directly or from inside a worktree of one)
+is_bare_repo() {
+  if [ "$(git rev-parse --is-bare-repository)" = "true" ]; then
+    return 0
+  fi
+  git -C "$(git rev-parse --git-common-dir)" rev-parse --is-bare-repository 2>/dev/null | grep -q true
+}
+
+get_repo_dir() {
+  if is_bare_repo; then
+    cd "$(git rev-parse --git-common-dir)" && pwd
+  else
+    git rev-parse --show-toplevel
+  fi
+}
+
 if [ "$1" = "-l" ]; then
   # Parse porcelain output for paths and branches
   wt_path=""
@@ -130,8 +146,8 @@ if [ "$1" = "-l" ]; then
 fi
 
 if [ "$1" = "-b" ]; then
-  if [ "$(git rev-parse --is-bare-repository)" = "true" ]; then
-    cd "$(git rev-parse --git-dir)" && pwd
+  if is_bare_repo; then
+    get_repo_dir
   else
     git worktree list --porcelain | head -1 | sed 's/worktree //'
   fi
@@ -146,12 +162,8 @@ if [ "$1" = "-d" ] || [ "$1" = "-D" ]; then
     exit 1
   fi
   BRANCH="$1"
-  if [ "$(git rev-parse --is-bare-repository)" = "true" ]; then
-    REPO_DIR="$(cd "$(git rev-parse --git-dir)" && pwd)"
-  else
-    REPO_DIR="$(git rev-parse --show-toplevel)"
-  fi
-  if [ "$(git rev-parse --is-bare-repository)" = "true" ]; then
+  REPO_DIR="$(get_repo_dir)"
+  if is_bare_repo; then
     WORKTREE_DIR="$REPO_DIR/$BRANCH"
   else
     REPO_NAME="$(basename "$REPO_DIR")"
@@ -202,12 +214,8 @@ if [ "$1" = "-c" ]; then
 else
   BRANCH="$1"
 fi
-if [ "$(git rev-parse --is-bare-repository)" = "true" ]; then
-  REPO_DIR="$(cd "$(git rev-parse --git-dir)" && pwd)"
-else
-  REPO_DIR="$(git rev-parse --show-toplevel)"
-fi
-if [ "$(git rev-parse --is-bare-repository)" = "true" ]; then
+REPO_DIR="$(get_repo_dir)"
+if is_bare_repo; then
   WORKTREE_DIR="$REPO_DIR/$BRANCH"
 else
   REPO_NAME="$(basename "$REPO_DIR")"
