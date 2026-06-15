@@ -12,13 +12,28 @@ GREEN=$'\033[38;2;166;218;149m'
 RED=$'\033[38;2;237;135;150m'
 RESET=$'\033[0m'
 
-model=$(echo "$input" | jq -r '.model.display_name // "Unknown"')
-version=$(echo "$input" | jq -r '.version // empty')
-ctx_used=$(echo "$input" | jq -r '.context_window.current_usage | (.input_tokens + .output_tokens + .cache_creation_input_tokens + .cache_read_input_tokens) // 0')
-ctx_total=$(echo "$input" | jq -r '.context_window.context_window_size // 0')
-added=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
-removed=$(echo "$input" | jq -r '.cost.total_lines_removed // 0')
-duration_ms=$(echo "$input" | jq -r '.cost.total_api_duration_ms // 0')
+# Extract every field in a single jq pass (one value per line). Read line by
+# line rather than with a tab IFS, so empty fields survive instead of collapsing.
+{
+  read -r model
+  read -r version
+  read -r ctx_used
+  read -r ctx_total
+  read -r added
+  read -r removed
+  read -r duration_ms
+  read -r cwd
+} < <(echo "$input" | jq -r '
+  .model.display_name // "Unknown",
+  (.version // ""),
+  ((.context_window.current_usage
+    | (.input_tokens + .output_tokens + .cache_creation_input_tokens + .cache_read_input_tokens)) // 0),
+  (.context_window.context_window_size // 0),
+  (.cost.total_lines_added // 0),
+  (.cost.total_lines_removed // 0),
+  (.cost.total_api_duration_ms // 0),
+  (.cwd // "")
+')
 duration_s=$(( duration_ms / 1000 ))
 duration_m=$(( duration_s / 60 ))
 duration_h=$(( duration_m / 60 ))
@@ -29,7 +44,6 @@ elif [ $duration_m -gt 0 ]; then
 else
   duration="${duration_s}s"
 fi
-cwd=$(echo "$input" | jq -r '.cwd // empty')
 main_worktree=$(git -C "$cwd" worktree list --porcelain 2>/dev/null | head -1 | sed 's/worktree //')
 repo=$(basename "${main_worktree:-$cwd}")
 branch=$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
