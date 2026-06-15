@@ -34,6 +34,9 @@ gwt <branch-name>                  # Create a worktree and print its path
 gwt -c <branch> -- <cmd> [args]    # Create a worktree and run a command in it
 gwt -d <branch-name>               # Delete a worktree
 gwt -D <branch-name>               # Delete worktree and local branch
+gwt -b                             # Print the main worktree path
+gwt -p [--dry-run]                 # Prune worktrees whose branch is gone from the remote
+gwt --fix-remote-tracking          # Add fetch refspec and fetch remote tracking refs
 gwt -l                             # List all worktrees
 gwt -h | --help                    # Show help
 ```
@@ -52,6 +55,13 @@ Start a Claude Code session in a worktree:
 
 ```bash
 gwt -c my-feature -- claude
+```
+
+Prune worktrees whose branches were merged and deleted on the remote:
+
+```bash
+gwt -p --dry-run    # Preview what would be pruned
+gwt -p              # Prune them
 ```
 
 ## Claude Code
