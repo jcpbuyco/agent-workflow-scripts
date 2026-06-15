@@ -6,6 +6,8 @@ USAGE="Usage: gwt <branch-name>
        gwt -c <branch-name> -- <command> [args...]
        gwt -d <branch-name>
        gwt -l
+       gwt -p [--dry-run]
+       gwt --fix-remote-tracking
        gwt -h | --help
 
 Options:
@@ -14,6 +16,8 @@ Options:
   -d <branch>             Delete a worktree
   -D <branch>             Delete worktree and local branch
   -b                      Print the main worktree path
+  -p [--dry-run]          Prune worktrees whose branch is gone from remote
+  --fix-remote-tracking   Add fetch refspec and fetch remote tracking refs
   -l                      List all worktrees
   -h, --help              Show this help message"
 
@@ -48,6 +52,84 @@ get_repo_dir() {
   fi
 }
 
+if [ "$1" = "-p" ]; then
+  dry_run=false
+  if [ "$2" = "--dry-run" ]; then
+    dry_run=true
+  fi
+  REPO_DIR="$(get_repo_dir)"
+  # Ensure fetch refspec exists for bare repos
+  existing_fetch=$(git -C "$REPO_DIR" config --get remote.origin.fetch 2>/dev/null || true)
+  if [ -z "$existing_fetch" ]; then
+    echo "Error: no fetch refspec configured. Run 'gwt --fix-remote-tracking' first."
+    exit 1
+  fi
+  # Fetch and prune remote refs
+  git -C "$REPO_DIR" fetch --prune origin
+  # Get list of remote branches
+  remote_branches=$(git -C "$REPO_DIR" for-each-ref --format='%(refname:short)' refs/remotes/origin/ 2>/dev/null | sed 's|^origin/||')
+  if [ -z "$remote_branches" ]; then
+    echo "Error: no remote branches found. Check your remote configuration."
+    exit 1
+  fi
+  pruned=0
+  while IFS= read -r wt_line; do
+    [[ "$wt_line" == worktree\ * ]] || continue
+    wt_path="${wt_line#worktree }"
+    # Read the next lines to find the branch
+    IFS= read -r next_line
+    # Skip HEAD line
+    while [[ "$next_line" == "HEAD "* ]]; do
+      IFS= read -r next_line
+    done
+    [[ "$next_line" == "branch "* ]] || continue
+    wt_branch="${next_line#branch refs/heads/}"
+    # Skip the main/default branch
+    default_branch=$(git -C "$REPO_DIR" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+    [ "$wt_branch" = "$default_branch" ] && continue
+    # Only prune branches that were tracking a remote (i.e. were pushed before)
+    branch_remote=$(git -C "$REPO_DIR" config "branch.${wt_branch}.remote" 2>/dev/null || true)
+    [ -z "$branch_remote" ] && continue
+    # Check if branch is gone from remote
+    if ! echo "$remote_branches" | grep -qx "$wt_branch"; then
+      if $dry_run; then
+        echo "[dry-run] Would prune: $wt_branch ($wt_path)"
+      else
+        # Check for uncommitted changes
+        if [ -d "$wt_path" ]; then
+          porcelain=$(git -C "$wt_path" status --porcelain 2>/dev/null || true)
+          if [ -n "$porcelain" ]; then
+            echo "Skipping $wt_branch (has uncommitted changes)"
+            continue
+          fi
+        fi
+        git worktree remove "$wt_path" 2>/dev/null && git branch -d "$wt_branch" 2>/dev/null || true
+        echo "Pruned: $wt_branch ($wt_path)"
+      fi
+      pruned=$((pruned + 1))
+    fi
+  done < <(git -C "$REPO_DIR" worktree list --porcelain)
+  if [ $pruned -eq 0 ]; then
+    echo "Nothing to prune. All worktree branches exist on remote."
+  fi
+  exit 0
+fi
+
+if [ "$1" = "--fix-remote-tracking" ]; then
+  REPO_DIR="$(get_repo_dir)"
+  existing=$(git -C "$REPO_DIR" config --get remote.origin.fetch 2>/dev/null || true)
+  if [ -n "$existing" ]; then
+    echo "remote.origin.fetch already set: $existing"
+  else
+    git -C "$REPO_DIR" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+    echo "Added fetch refspec to remote.origin"
+  fi
+  echo "Fetching from origin..."
+  git -C "$REPO_DIR" fetch origin
+  echo "Done. Remote tracking refs are now available."
+  exit 0
+fi
+
 if [ "$1" = "-l" ]; then
   # Parse porcelain output for paths and branches
   wt_path=""
@@ -57,7 +139,8 @@ if [ "$1" = "-l" ]; then
     if [[ "$line" == worktree\ * ]]; then
       wt_path="${line#worktree }"
     elif [[ "$line" == "branch "* ]]; then
-      branch="${line#branch refs/heads/}"
+      raw_branch="${line#branch refs/heads/}"
+      branch="$raw_branch"
       max_branch=30
       if [ ${#branch} -gt $max_branch ]; then
         branch="${branch:0:$((max_branch - 1))}…"
@@ -93,8 +176,16 @@ if [ "$1" = "-l" ]; then
         status="N/A"
       fi
 
-      # Ahead/behind remote
+      # Ahead/behind remote (try @{upstream}, fall back to remote merge ref)
       sync=$(git -C "$wt_path" rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null || true)
+      if [ -z "$sync" ] && [ -n "$raw_branch" ]; then
+        remote=$(git -C "$wt_path" config "branch.${raw_branch}.remote" 2>/dev/null || true)
+        merge=$(git -C "$wt_path" config "branch.${raw_branch}.merge" 2>/dev/null || true)
+        if [ -n "$remote" ] && [ -n "$merge" ]; then
+          remote_ref="${remote}/${merge#refs/heads/}"
+          sync=$(git -C "$wt_path" rev-list --left-right --count "${remote_ref}...HEAD" 2>/dev/null || true)
+        fi
+      fi
       if [ -n "$sync" ]; then
         behind=$(echo "$sync" | awk '{print $1}')
         ahead=$(echo "$sync" | awk '{print $2}')
