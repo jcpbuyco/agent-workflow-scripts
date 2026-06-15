@@ -13,7 +13,9 @@ RED=$'\033[38;2;237;135;150m'
 RESET=$'\033[0m'
 
 model=$(echo "$input" | jq -r '.model.display_name // "Unknown"')
-used=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
+version=$(echo "$input" | jq -r '.version // empty')
+ctx_used=$(echo "$input" | jq -r '.context_window.current_usage | (.input_tokens + .output_tokens + .cache_creation_input_tokens + .cache_read_input_tokens) // 0')
+ctx_total=$(echo "$input" | jq -r '.context_window.context_window_size // 0')
 added=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
 removed=$(echo "$input" | jq -r '.cost.total_lines_removed // 0')
 duration_ms=$(echo "$input" | jq -r '.cost.total_api_duration_ms // 0')
@@ -31,27 +33,31 @@ cwd=$(echo "$input" | jq -r '.cwd // empty')
 main_worktree=$(git -C "$cwd" worktree list --porcelain 2>/dev/null | head -1 | sed 's/worktree //')
 repo=$(basename "${main_worktree:-$cwd}")
 branch=$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+tracking=$(git -C "$cwd" rev-list --left-right --count HEAD...@{upstream} 2>/dev/null || echo "")
+ahead=$(echo "$tracking" | awk '{print $1}')
+behind=$(echo "$tracking" | awk '{print $2}')
 
-# Build progress bar
-bar=""
-if [ -n "$used" ]; then
-  used_int=$(printf "%.0f" "$used")
-  filled=$(( used_int * 6 / 100 ))
-  empty=$(( 6 - filled ))
-  for ((i=0; i<filled; i++)); do bar="${bar}|"; done
-  for ((i=0; i<empty; i++)); do bar="${bar}·"; done
-  ctx_part="${bar} ${used_int}%"
-else
-  ctx_part="······ --%"
-fi
+# Context window usage
+used_k=$(( ctx_used / 1000 ))
+total_k=$(( ctx_total / 1000 ))
+ctx_part="${used_k}k/${total_k}k"
 
 location=""
 if [ -n "$repo" ]; then
   location="${SAPPHIRE}"$'\xef\x81\xbb'"${TEAL} $repo"
   if [ -n "$branch" ]; then
-    location="$location  ${MAUVE}"$'\xee\x9c\xa5'"${TEAL} $branch  ${GREEN}+${added}${RESET} ${RED}-${removed}${RESET}"
+    sync=""
+    if [ -n "$ahead" ] && [ "$ahead" -gt 0 ] 2>/dev/null; then sync="${GREEN}↑${ahead}${RESET}"; fi
+    if [ -n "$behind" ] && [ "$behind" -gt 0 ] 2>/dev/null; then sync="${sync} ${RED}↓${behind}${RESET}"; fi
+    location="$location  ${MAUVE}"$'\xee\x9c\xa5'"${TEAL} $branch"
+    if [ -n "$sync" ]; then location="$location  ${sync}"; fi
+    location="$location  ${GREEN}+${added}${RESET} ${RED}-${removed}${RESET}"
   fi
 fi
 
-echo "${TEAL}${location}${RESET}"
+version_part=""
+if [ -n "$version" ]; then
+  version_part="${MAUVE}v${version}${RESET}  "
+fi
+echo "${version_part}${TEAL}${location}${RESET}"
 echo "${BLUE}${model}${RESET}  ${PEACH}${ctx_part}${RESET}  ${duration}"
