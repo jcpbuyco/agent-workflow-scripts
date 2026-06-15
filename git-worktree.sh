@@ -58,21 +58,17 @@ if [ "$1" = "-p" ]; then
     dry_run=true
   fi
   REPO_DIR="$(get_repo_dir)"
-  # Ensure fetch refspec exists for bare repos
-  existing_fetch=$(git -C "$REPO_DIR" config --get remote.origin.fetch 2>/dev/null || true)
-  if [ -z "$existing_fetch" ]; then
-    echo "Error: no fetch refspec configured. Run 'gwt --fix-remote-tracking' first."
-    exit 1
-  fi
-  # Fetch and prune remote refs
-  git -C "$REPO_DIR" fetch --prune origin
-  # Get list of remote branches
-  remote_branches=$(git -C "$REPO_DIR" for-each-ref --format='%(refname:short)' refs/remotes/origin/ 2>/dev/null | sed 's|^origin/||')
+  # Query the remote directly for its current branches: no fetch refspec or
+  # remote-tracking refs required, and no local mutation — so --dry-run stays
+  # read-only and a failed/offline remote is reported cleanly.
+  remote_branches=$(git -C "$REPO_DIR" ls-remote --heads origin 2>/dev/null | sed -E 's@.*refs/heads/@@')
   if [ -z "$remote_branches" ]; then
-    echo "Error: no remote branches found. Check your remote configuration."
+    echo "Error: could not list branches from 'origin'. Is the remote configured and reachable?"
     exit 1
   fi
-  pruned=0
+  # The default branch is never a prune candidate (computed once, not per loop).
+  default_branch=$(git -C "$REPO_DIR" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+  found=0
   while IFS= read -r wt_line; do
     [[ "$wt_line" == worktree\ * ]] || continue
     wt_path="${wt_line#worktree }"
@@ -85,31 +81,38 @@ if [ "$1" = "-p" ]; then
     [[ "$next_line" == "branch "* ]] || continue
     wt_branch="${next_line#branch refs/heads/}"
     # Skip the main/default branch
-    default_branch=$(git -C "$REPO_DIR" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
     [ "$wt_branch" = "$default_branch" ] && continue
     # Only prune branches that were tracking a remote (i.e. were pushed before)
     branch_remote=$(git -C "$REPO_DIR" config "branch.${wt_branch}.remote" 2>/dev/null || true)
     [ -z "$branch_remote" ] && continue
-    # Check if branch is gone from remote
-    if ! echo "$remote_branches" | grep -qx "$wt_branch"; then
+    # Check if branch is gone from remote (-F literal, -x whole-line match)
+    if ! printf '%s\n' "$remote_branches" | grep -Fqx "$wt_branch"; then
+      found=$((found + 1))
       if $dry_run; then
         echo "[dry-run] Would prune: $wt_branch ($wt_path)"
-      else
-        # Check for uncommitted changes
-        if [ -d "$wt_path" ]; then
-          porcelain=$(git -C "$wt_path" status --porcelain 2>/dev/null || true)
-          if [ -n "$porcelain" ]; then
-            echo "Skipping $wt_branch (has uncommitted changes)"
-            continue
-          fi
-        fi
-        git worktree remove "$wt_path" 2>/dev/null && git branch -d "$wt_branch" 2>/dev/null || true
-        echo "Pruned: $wt_branch ($wt_path)"
+        continue
       fi
-      pruned=$((pruned + 1))
+      # Refuse to touch a worktree with uncommitted changes
+      if [ -d "$wt_path" ]; then
+        porcelain=$(git -C "$wt_path" status --porcelain 2>/dev/null || true)
+        if [ -n "$porcelain" ]; then
+          echo "Skipping $wt_branch (has uncommitted changes)"
+          continue
+        fi
+      fi
+      # Report what actually happened instead of assuming success
+      if git -C "$REPO_DIR" worktree remove "$wt_path" 2>/dev/null; then
+        if git -C "$REPO_DIR" branch -d "$wt_branch" 2>/dev/null; then
+          echo "Pruned: $wt_branch ($wt_path)"
+        else
+          echo "Removed worktree for $wt_branch; kept local branch (not fully merged — use 'git branch -D $wt_branch' to force)"
+        fi
+      else
+        echo "Could not remove worktree at $wt_path (skipped)"
+      fi
     fi
   done < <(git -C "$REPO_DIR" worktree list --porcelain)
-  if [ $pruned -eq 0 ]; then
+  if [ $found -eq 0 ]; then
     echo "Nothing to prune. All worktree branches exist on remote."
   fi
   exit 0
